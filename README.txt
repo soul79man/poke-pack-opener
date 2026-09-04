@@ -1,12 +1,15 @@
-POKEPACK OPENER - PHONE VERSION
+POKEPACK OPENER - PHONE VERSION 2
 
-This is a mobile/PWA version of the working Pokémon pack opener.
+This is the upgraded mobile/PWA version of the fan-made Pokémon TCG pack opener.
 
-To put it on a phone:
-1. Upload the contents of this folder to a static web host such as GitHub Pages.
-2. Open the resulting HTTPS website on the phone.
-3. On Android/Chrome: browser menu -> Add to Home screen / Install app.
-4. On iPhone/Safari: Share -> Add to Home Screen.
+Features:
+- Real Pokémon TCG set/card data from the public PokémonTCG/pokemon-tcg-data repository
+- Mobile-friendly pack opening with animated reveal screen
+- 10-card simulated packs
+- Collection saved locally on the device
+- Search/filter collection
+- Set browser
+- Achievements
+- Daily pack button (one per calendar day on the device)
 
-The app loads real card/set data from the public Pokémon TCG data repository and real card images.
-It is a fan-made simulator; pack contents and odds are fictional.
+Pack contents and odds are fictional and this is not an official Pokémon product.
