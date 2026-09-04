@@ -1,14 +1,11 @@
-PokéPack Opener V4
+PokéPack Opener V5
 
-Features:
-- Real Pokémon TCG sets/cards from the public PokemonTCG/pokemon-tcg-data GitHub repository.
-- Simulated 10-card pack opening.
-- One-card-at-a-time reveal with BIG HIT animation.
-- Collection saved on the device.
-- Card value shown when revealed and in the collection.
-- Sets browser: tap any set to see every card in that set, with values sorted highest first.
-- Set values start with cached/live market references where available and use a deterministic collector estimate when live pricing is unavailable.
-- Values are indicative raw/ungraded values, not guaranteed sale prices.
-- Mobile/PWA friendly.
+V5 adds a set card browser: tap any set to see every card, its number/rarity and value, sorted highest value first.
 
-To publish/update on GitHub Pages, replace the files in the repository root with these files.
+Pricing is deliberately conservative: there are NO rarity-based fake estimates. The app uses verified market overrides where available, then tries Cardmarket/TCGplayer market data, and otherwise shows 'Price unavailable'. Values are indicative raw/ungraded references, not guaranteed sale prices.
+
+Chaos Rising examples verified 4 Sep 2026:
+- Mega Greninja ex 116/086: Cardmarket trend €159.90, converted to approximately £137.50.
+- Mega Greninja ex 122/086: UK sold-market reference £135.90.
+
+GitHub Pages / PWA ready.
