@@ -1,0 +1,112 @@
+<!doctype html>
+<html lang="en">
+<head>
+<meta charset="utf-8"><meta name="viewport" content="width=device-width,initial-scale=1">
+<title>PokéPack Opener</title>
+<link rel="manifest" href="manifest.webmanifest">
+<meta name="theme-color" content="#182c69">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="PokéPack Opener">
+<link rel="apple-touch-icon" href="icons/icon-192.png">
+<style>
+*{box-sizing:border-box}body{margin:0;font-family:Arial,Helvetica,sans-serif;color:#fff;background:radial-gradient(circle at 50% -10%,#395ab0,#10152a 45%,#070914);min-height:100vh}
+header{text-align:center;padding:22px 15px;border-bottom:1px solid #ffffff1f}h1{margin:0;font-size:40px}.tag{opacity:.8;margin-top:6px}
+main{max-width:1250px;margin:auto;padding:18px}.toolbar{display:flex;justify-content:center;align-items:center;gap:10px;flex-wrap:wrap}
+select,button{border:0;border-radius:12px;padding:12px 16px;font-size:16px;font-weight:700}button{touch-action:manipulation}select{min-width:390px;background:white;color:#111}button{background:#ffd83d;color:#111;cursor:pointer;box-shadow:0 4px #a77f00}button:disabled{opacity:.5;cursor:not-allowed}button.secondary{background:white;box-shadow:none}
+.status{text-align:center;margin:13px;min-height:24px;color:#cfe0ff}.error{color:#ffaaaa}
+.info{max-width:900px;margin:15px auto;padding:12px 16px;background:#263a68;border-radius:12px;color:#e2ebff;line-height:1.45;font-size:14px}
+.packArea{text-align:center;min-height:315px}.pack{width:215px;height:285px;margin:auto;border-radius:20px;display:flex;flex-direction:column;align-items:center;justify-content:center;background:linear-gradient(145deg,#111,#2943a6 45%,#e32e50);box-shadow:0 18px 45px #0009;transition:.5s}.pack img{max-width:170px;max-height:120px;object-fit:contain}.pack h2{margin:7px 0 3px;font-size:22px;text-shadow:2px 2px #000}.pack.opening{animation:shake .7s infinite}.pack.done{transform:scale(.75);opacity:.15}@keyframes shake{25%{transform:rotate(-4deg)}75%{transform:rotate(4deg)}}
+.cards{display:grid;grid-template-columns:repeat(auto-fill,minmax(175px,1fr));gap:18px}.card{position:relative;background:#eee;color:#111;padding:8px;border-radius:15px;box-shadow:0 10px 28px #0008;animation:reveal .55s both}.card img{width:100%;display:block;border-radius:10px;background:#ddd;aspect-ratio:.716;object-fit:cover}.card .caption{font-weight:bold;padding:7px 3px 2px}.card small{font-weight:normal;opacity:.7}.card.rare{box-shadow:0 0 0 3px #8bd4ff,0 10px 30px #50baff55}.card.ultra{box-shadow:0 0 0 3px #ffd84d,0 0 35px #ffd84d99,0 10px 30px #0008}.badge{position:absolute;right:12px;top:12px;background:#111d;color:#fff;border-radius:8px;padding:5px 7px;font-size:11px;font-weight:bold}
+@keyframes reveal{from{opacity:0;transform:rotateY(90deg) translateY(20px)}to{opacity:1;transform:none}}
+@media(max-width:600px){h1{font-size:29px}.tag{font-size:13px}.toolbar{display:grid;grid-template-columns:1fr 1fr;width:100%}.toolbar select{grid-column:1/-1;min-width:0;width:100%;font-size:15px}.toolbar button{width:100%;padding:13px 8px}.cards{grid-template-columns:repeat(2,minmax(0,1fr));gap:10px}.card{padding:5px;border-radius:11px}.card .caption{font-size:13px}.card small{font-size:10px}.badge{right:7px;top:7px;font-size:9px;padding:4px}.collection{grid-template-columns:repeat(3,minmax(0,1fr));gap:8px}.pack{width:180px;height:240px}.packArea{min-height:265px}main{padding:12px}.info{font-size:12px}.panel{padding:10px}}
+.panel{margin-top:28px;background:#ffffff0b;border:1px solid #ffffff1a;border-radius:15px;padding:15px}.panel h2{text-align:center}.collection{display:grid;grid-template-columns:repeat(auto-fill,minmax(125px,1fr));gap:12px}.item{position:relative}.item img{width:100%;border-radius:9px;display:block}.qty{position:absolute;bottom:5px;right:5px;background:#111e;padding:4px 7px;border-radius:8px;font-size:12px}.muted{text-align:center;opacity:.65}
+footer{text-align:center;padding:25px;opacity:.6;font-size:12px;line-height:1.5}
+</style>
+</head>
+<body>
+<header><h1>⚡ PokéPack Opener ⚡</h1><div class="tag">Real Pokémon TCG sets • Real card data • Real card images</div></header>
+<main>
+<div class="toolbar">
+<select id="setSelect"><option>Loading real Pokémon sets…</option></select>
+<button id="openBtn" disabled>OPEN PACK 🎴</button>
+<button class="secondary" id="clearBtn">Clear Collection</button>
+</div>
+<div id="status" class="status">Loading…</div>
+<div class="info"><b>New approach:</b> this version uses the public Pokémon TCG data repository on GitHub rather than the TCGdex server that your PC cannot reach. Your browser only needs access to <b>raw.githubusercontent.com</b> and the card-image host.</div>
+<div class="packArea"><div class="pack" id="pack"><div style="font-size:62px">⚪🔴</div><h2>BOOSTER PACK</h2><div id="packName">Loading…</div></div></div>
+<div id="cards" class="cards"></div>
+<div class="panel"><h2>📚 My Collection</h2><div id="collection" class="collection"></div><div id="empty" class="muted">Open a pack to start collecting.</div></div>
+</main>
+<footer>
+Fan-made simulator. Pokémon and Pokémon TCG are trademarks of Nintendo, Creatures Inc., GAME FREAK inc., and The Pokémon Company.<br>
+Card data is sourced from the public PokémonTCG/pokemon-tcg-data repository. Pack contents and pull odds in this simulator are fictional.
+</footer>
+<script>
+const DATA='https://raw.githubusercontent.com/PokemonTCG/pokemon-tcg-data/master';
+const IMG='https://images.pokemontcg.io';
+let sets=[],cards=[],selected=null;
+let collection=JSON.parse(localStorage.getItem('pokePackCollection2')||'{}');
+const $=x=>document.getElementById(x);
+function status(t,e=false){$('status').textContent=t;$('status').className=e?'status error':'status'}
+async function get(url){
+ const c=new AbortController();const timer=setTimeout(()=>c.abort(),20000);
+ try{const r=await fetch(url,{cache:'no-store',signal:c.signal});if(!r.ok)throw new Error('HTTP '+r.status);return await r.json()}
+ finally{clearTimeout(timer)}
+}
+function score(r=''){r=r.toLowerCase();if(/secret|illustration|special|hyper|gold|rainbow|amazing|shining/.test(r))return 4;if(/ultra|double rare|rare holo/.test(r))return 3;if(/rare/.test(r))return 2;return 1}
+function cls(r){let s=score(r);return s>=4?'ultra':s>=2?'rare':''}
+async function loadSets(){
+ try{
+  status('Loading the real Pokémon TCG set list from GitHub…');
+  sets=await get(DATA+'/sets/en.json');
+  sets.sort((a,b)=>new Date(b.releaseDate||0)-new Date(a.releaseDate||0));
+  $('setSelect').innerHTML=sets.map(s=>`<option value="${s.id}">${s.name} — ${s.series} (${s.total||s.printedTotal||'?'} cards)</option>`).join('');
+  await choose(sets[0].id);
+ }catch(e){
+  $('setSelect').innerHTML='<option>Could not load sets</option>';
+  status('GitHub card data could not be reached from this PC. '+(e.name==='AbortError'?'The request timed out.':'The browser blocked the request.'),true);
+ }
+}
+async function choose(id){
+ selected=sets.find(s=>s.id===id);cards=[];$('cards').innerHTML='';$('openBtn').disabled=true;
+ if(!selected)return;
+ $('packName').textContent=selected.name;status('Loading every real card in '+selected.name+'…');
+ try{
+  const data=await get(DATA+'/cards/en/'+id+'.json');
+  cards=Array.isArray(data)?data:data.cards||[];
+  if(!cards.length)throw new Error('No cards');
+  $('packName').textContent=selected.name;
+  status(`${cards.length} real cards loaded from ${selected.name}.`);
+  $('openBtn').disabled=false;
+ }catch(e){status('The set list worked, but the cards for '+selected.name+' could not be loaded.',true)}
+}
+function pull(){
+ const b=[[],[],[],[]];cards.forEach(c=>b[score(c.rarity)-1].push(c));
+ const r=Math.random(),want=r<.015?4:r<.08?3:r<.28?2:1,pool=b[want-1].length?b[want-1]:cards;
+ return pool[Math.floor(Math.random()*pool.length)];
+}
+function image(c){return IMG+'/'+encodeURIComponent(selected.id)+'/'+encodeURIComponent(c.number)+'.png'}
+function save(c){if(!collection[c.id])collection[c.id]={count:0,card:c,set:selected.name,setId:selected.id};collection[c.id].count++;collection[c.id].card=c;localStorage.setItem('pokePackCollection2',JSON.stringify(collection))}
+function renderCollection(){
+ const ids=Object.keys(collection);$('empty').style.display=ids.length?'none':'block';
+ $('collection').innerHTML=ids.map(id=>{let e=collection[id],c=e.card;
+ return `<div class="item" title="${c.name} — ${e.count} copy/copies"><img src="${imageForStored(e)}" alt="${c.name}"><span class="qty">×${e.count}</span></div>`}).join('');
+}
+function imageForStored(e){return IMG+'/'+encodeURIComponent(e.setId)+'/'+encodeURIComponent(e.card.number)+'.png'}
+async function openPack(){
+ if(!cards.length)return;$('openBtn').disabled=true;$('cards').innerHTML='';$('pack').classList.add('opening');status('Opening '+selected.name+'…');
+ await new Promise(r=>setTimeout(r,900));const pulls=Array.from({length:10},pull);
+ $('pack').classList.remove('opening');$('pack').classList.add('done');
+ pulls.forEach((c,i)=>{save(c);let el=document.createElement('div');el.className='card '+cls(c.rarity);el.style.animationDelay=(i*100)+'ms';
+ el.innerHTML=`<span class="badge">${c.rarity||'Card'}</span><img src="${image(c)}" alt="${c.name}" onerror="this.style.display='none';this.nextElementSibling.innerHTML+='';"><div class="caption">${c.name}<br><small>${selected.name} • ${c.number}</small></div>`;$('cards').appendChild(el)});
+ renderCollection();status('Pack opened! 10 real cards added to the collection.');$('openBtn').disabled=false;setTimeout(()=>$('pack').classList.remove('done'),450)
+}
+$('setSelect').onchange=e=>choose(e.target.value);$('openBtn').onclick=openPack;
+$('clearBtn').onclick=()=>{if(confirm('Clear the saved collection?')){collection={};localStorage.removeItem('pokePackCollection2');renderCollection();status('Collection cleared.')}}
+renderCollection();loadSets();
+</script>
+<script>
+if('serviceWorker' in navigator){window.addEventListener('load',()=>navigator.serviceWorker.register('./sw.js').catch(()=>{}));}
+</script>
+</body></html>
