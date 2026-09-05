@@ -1,12 +1,15 @@
-POKEPACK OPENER V7
+PokéPack Opener V18
 
-Changes:
-- Sets browser: tap a set to see every card, sorted highest value first.
-- Pricing now uses the PokeMP public API's TCGPlayer market prices where available.
-- One set-level pricing request supplies prices for the whole set, avoiding hundreds of individual API calls.
-- Prices are converted from USD to GBP using an approximate current FX rate.
-- TCGdex remains as a secondary fallback for individual cards.
-- No rarity-based invented prices.
-- Service-worker cache bumped to V7.
+PRICING:
+The website no longer checks prices live. It reads prices.json stored in the GitHub repository, so it loads much faster and works directly on GitHub Pages without a local server.
 
-Important: prices are market references, not guaranteed UK sale prices. TCGPlayer is a US marketplace, so UK realised prices can differ.
+SETUP:
+1. Upload/replace the contents of this folder in your GitHub repository root.
+2. Commit the files.
+3. In GitHub, open Actions -> Update card prices -> Run workflow once.
+4. Wait for it to finish. It creates prices.json in the repository.
+5. Refresh the website.
+
+The workflow also runs daily at 21:30 UTC, after TCGCSV's normal daily update window.
+
+Prices are TCGplayer market prices converted from USD to GBP at an approximate fixed rate of 0.74. They are indicative ungraded/raw values, not guaranteed UK sale prices.

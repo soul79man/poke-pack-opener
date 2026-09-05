@@ -21,7 +21,7 @@
       <div class="note" id="status">Loading the card database…</div>
     </div>
     <div class="pack-wrap"><div class="pack" id="pack"><div class="pack-title">POKÉMON</div><div class="pack-badge">⚡</div><div class="pack-set" id="packSet">TCG</div></div></div>
-    <div style="text-align:center"><button class="primary" id="openBtn" disabled>OPEN PACK</button><div class="note">Fan-made simulator. Pack contents and odds are fictional. Card values are TCGPlayer market references converted to GBP and are indicative, not guaranteed UK sale prices.</div></div>
+    <div style="text-align:center"><button class="primary" id="openBtn" disabled>OPEN PACK</button><div class="note">Fan-made simulator. Pack contents and odds are fictional. Card values are cached TCGplayer market references converted to GBP. Prices are updated daily.</div></div>
   </section>
 
   <section id="collection" class="screen"><div class="hero"><h2>My Collection</h2><p>Every card you've pulled is saved on this device.</p><div class="grid-info"><span id="collectionCount">0 cards</span><span id="collectionSets">0 sets</span></div><div class="grid-info"><span>Collection value</span><b id="collectionValue">£0.00</b></div><div class="filters"><input id="search" class="search" placeholder="Search Pokémon or rarity…"><button class="secondary" id="clearCollection">Reset</button></div></div><div id="collectionCards" class="cards"></div></section>
@@ -43,82 +43,22 @@ function save(){localStorage.setItem('pokeCollectionV2',JSON.stringify(owned));l
 function updateStats(){let n=Object.values(owned).reduce((a,x)=>a+x.count,0);$('totalOwned').textContent=n;$('achievementCount').textContent=achievementDefs.filter(a=>a.ok()).length}
 function toast(t){$('toast').textContent=t;$('toast').classList.add('show');setTimeout(()=>$('toast').classList.remove('show'),2200)}
 function imgUrl(c){return c.images?.large||c.images?.small||`${IMG}/${c.set?.id||selectedSetId}/${c.number}.png`}
-async function load(){try{let r=await fetch(DATA+'/sets/en.json');if(!r.ok)throw Error();sets=await r.json();sets.sort((a,b)=>(b.releaseDate||'').localeCompare(a.releaseDate||''));populateSets();$('status').textContent=`Loaded ${sets.length} real sets. Choose one and open a pack.`;selectedSetId=sets[0]?.id||'';$('setSelect').value=selectedSetId;updatePackName();await loadCards(selectedSetId)}catch(e){$('status').textContent='Could not load the card database. Check that GitHub data is reachable on this device.'}}
+async function load(){try{let r=await fetch(DATA+'/sets/en.json');if(!r.ok)throw Error();sets=await r.json();sets.sort((a,b)=>(b.releaseDate||'').localeCompare(a.releaseDate||''));populateSets();$('status').textContent=`Loaded ${sets.length} real sets. Loading cached prices…`;selectedSetId=sets[0]?.id||'';$('setSelect').value=selectedSetId;updatePackName();await loadPrices();await loadCards(selectedSetId)}catch(e){$('status').textContent='Could not load the card database. Check that GitHub data is reachable on this device.'}}
 function populateSets(){let s=$('setSelect');s.innerHTML=sets.map(x=>`<option value="${x.id}">${esc(x.name)} — ${x.total||'?'} cards</option>`).join('');renderSets()}
 async function loadCards(id){selectedSetId=id;$('openBtn').disabled=true;$('status').textContent='Loading cards for this set…';try{let r=await fetch(DATA+'/cards/en/'+id+'.json');if(!r.ok)throw Error();cards=await r.json();$('status').textContent=`${cards.length} cards loaded. Tap the pack or OPEN PACK.`;$('openBtn').disabled=false;updatePackName()}catch(e){cards=[];$('status').textContent='This set could not be loaded. Try another set.'}}
 function updatePackName(){let s=sets.find(x=>x.id===selectedSetId);$('packSet').textContent=s?.name||'TCG'}
 $('setSelect').addEventListener('change',e=>loadCards(e.target.value));$('pack').addEventListener('click',()=>{$('openBtn').click()});$('openBtn').addEventListener('click',openPack);$('dailyBtn').addEventListener('click',dailyPack);
 function pick(){if(!cards.length)return null;let weights=[['Common',50],['Uncommon',25],['Rare',15],['Double Rare',5],['Ultra Rare',3],['Illustration Rare',2]];let pool=[];for(let [r,w] of weights)for(let c of cards.filter(x=>(x.rarity||'').toLowerCase().includes(r.toLowerCase())|| (r==='Rare'&&(x.rarity||'')==='Rare Holo'))){for(let i=0;i<w;i++)pool.push(c)}return pool[Math.floor(Math.random()*pool.length)]||cards[Math.floor(Math.random()*cards.length)]}
-const priceCache=JSON.parse(localStorage.getItem('pokePricesV4')||'{}');
 const GBP_PER_USD=0.7400;
-let pokeMPsets=null;
-let currentSetPrices={};
-function savePrices(){localStorage.setItem('pokePricesV4',JSON.stringify(priceCache));}
-function norm(s){return String(s??'').toLowerCase().replace(/[^a-z0-9]+/g,' ').trim()}
-function numNorm(s){return String(s??'').replace(/[^0-9a-z]+/gi,'').toLowerCase()}
-function cachePrice(c,v){if(c?.id){priceCache[c.id]=v;savePrices();}return v}
-async function fetchJson(url,ms=7000){const ctl=new AbortController();const timer=setTimeout(()=>ctl.abort(),ms);try{const r=await fetch(url,{cache:'no-store',signal:ctl.signal});if(!r.ok)throw Error('HTTP '+r.status);return await r.json()}finally{clearTimeout(timer)}}
-async function loadPokeMPSetPrices(setId){
-  if(currentSetPrices.__setId===setId)return currentSetPrices;
-  currentSetPrices={__setId:setId};
-  try{
-    if(!pokeMPsets){const d=await fetchJson('https://pokemp.com/api/v1/sets',10000);pokeMPsets=d.sets||[];}
-    const ours=sets.find(x=>x.id===setId); const target=norm(ours?.name||'');
-    let ps=pokeMPsets.find(x=>norm(x.name)===target);
-    if(!ps){
-      const target2=target.replace(/^me\d+\s*[:\-]\s*/,'');
-      ps=pokeMPsets.find(x=>norm(x.name).replace(/^me\d+\s*[:\-]\s*/,'')===target2);
-    }
-    if(!ps?.slug)return currentSetPrices;
-    const d=await fetchJson('https://pokemp.com/api/v1/sets/'+encodeURIComponent(ps.slug),10000);
-    const arr=d.cards||[];
-    currentSetPrices.__slug=ps.slug;
-    for(const x of arr){
-      const usd=Number(x.current_price);
-      if(!Number.isFinite(usd)||usd<=0)continue;
-      const keyName=norm(x.name);
-      const slug=norm(x.slug);
-      const price={value:usd*GBP_PER_USD,source:'TCGPlayer market',updated:x.price_date||d.set?.release_date||''};
-      if(keyName)currentSetPrices['name:'+keyName]=price;
-      if(slug)currentSetPrices['slug:'+slug]=price;
-      // PokeMP slugs often contain the collector number; save the digit-normalised form too.
-      const nums=(String(x.slug||'').match(/\d+(?:-\d+)?/g)||[]);
-      for(const n of nums)if(n.length>=2)currentSetPrices['num:'+numNorm(n)]=price;
-    }
-    return currentSetPrices;
-  }catch(e){return currentSetPrices}
-}
-function matchSetPrice(c,map){
-  const name=norm(c?.name); const num=numNorm(c?.number);
-  let v=map['name:'+name];
-  if(v)return v;
-  // Some PokeMP names include the collector number, e.g. "Mega Greninja ex - 116/086".
-  const candidates=Object.keys(map).filter(k=>k.startsWith('name:'));
-  const hit=candidates.find(k=>k.includes(name) && (!num || k.includes(num)));
-  if(hit)return map[hit];
-  if(num){const nkey='num:'+num; if(map[nkey])return map[nkey];}
-  return null;
-}
-async function getCardValue(c){
-  if(!c?.id)return {value:null,source:'unavailable'};
-  if(priceCache[c.id] && priceCache[c.id].source!=='unavailable')return priceCache[c.id];
-  try{
-    const map=await loadPokeMPSetPrices(c.set?.id||selectedSetId);
-    const v=matchSetPrice(c,map); if(v)return cachePrice(c,v);
-  }catch(e){}
-  // Secondary provider for cards/sets that PokeMP does not cover.
-  try{
-    const d=await fetchJson('https://api.tcgdex.net/v2/en/cards/'+encodeURIComponent(c.id),5000);
-    const cm=d.pricing?.cardmarket||{}; const tp=d.pricing?.tcgplayer||{};
-    const eur=(cm['trend-holo']??cm['avg-holo']??cm.trend??cm.avg7??cm.avg30??cm.avg);
-    if(Number.isFinite(Number(eur))&&Number(eur)>0)return cachePrice(c,{value:Number(eur)*0.858,source:'Cardmarket trend',updated:cm.updated||''});
-    for(const k of ['holofoil','reverse-holofoil','reverse','normal','1st-edition-holofoil','1st-edition']){const x=tp[k];const usd=Number(x?.marketPrice??x?.market);if(Number.isFinite(usd)&&usd>0)return cachePrice(c,{value:usd*GBP_PER_USD,source:'TCGPlayer market',updated:tp.updated||''});}
-  }catch(e){}
-  return {value:null,source:'unavailable',updated:''};
-}
+let priceData=null;
+async function loadPrices(){try{const r=await fetch('./prices.json?x='+Date.now(),{cache:'no-store'});if(!r.ok)throw Error('HTTP '+r.status);priceData=await r.json();const n=priceData.cardCount||Object.keys(priceData.prices||{}).length;const when=priceData.generatedAt?new Date(priceData.generatedAt).toLocaleString('en-GB',{dateStyle:'medium',timeStyle:'short'}):'';$('status').textContent=`Loaded ${sets.length} real sets and ${n.toLocaleString()} cached card prices${when?' · prices '+when:''}.`}catch(e){priceData={prices:{}};console.warn('Could not load prices.json',e);$('status').textContent=`Loaded ${sets.length} real sets. Cached prices not generated yet — run GitHub Actions → Update card prices.`}}
+function priceKey(c){return normSet(c?.set?.name||selectedSetId)+'|'+cardNumber(c?.number)}
+function staticPrice(c){const row=priceData?.prices?.[priceKey(c)];if(!row||!Number.isFinite(Number(row.gbp))||Number(row.gbp)<=0)return {value:null,source:'unavailable'};return {value:Number(row.gbp),source:'TCGplayer market',updated:row.updated||priceData?.generatedAt||''}}
+function getCardValue(c){return staticPrice(c)}
+function loadSetPrices(arr){const results=new Map();let matched=0;for(const c of arr){const v=staticPrice(c);if(v.value!=null)matched++;results.set(c.id,v)}const el=$('setDetailCount');if(el)el.textContent=`${arr.length} cards · ${matched} priced`;return results}
 function valueText(v){return v==null?'Price unavailable':'£'+Number(v).toFixed(2);}
 function openPack(){if(!cards.length)return;let pack=$('pack');pack.classList.remove('shake');void pack.offsetWidth;pack.classList.add('shake');pulled=[];for(let i=0;i<10;i++){let c=pick();if(c)pulled.push(c)}meta.packs++;currentIndex=0;$('reveal').classList.add('show');showReveal();}
-async function showReveal(){let c=pulled[currentIndex];if(!c)return;let rare=/(ultra|illustration|special|hyper|double|ace spec|secret)/i.test(c.rarity||'');if(rare){meta.rares++;meta.best=c.rarity||'Rare';}let ownedBefore=owned[c.id]?.count||0;$('revealContent').innerHTML=`<div class="reveal-card"><img src="${esc(imgUrl(c))}" alt="${esc(c.name)}"></div><div class="reveal-info"><div class="small">CARD ${currentIndex+1} OF ${pulled.length}</div><h2>${esc(c.name)}</h2><div>${esc(c.rarity||'Unknown rarity')} · ${esc(c.set?.name||'')}</div>${rare?'<div class="rare-banner">✨ BIG HIT! ✨</div>':''}<div class="value" id="cardValue">💷 Checking value…</div><div class="value-sub" id="valueSource">Market reference · ungraded</div><p class="small">You own ${ownedBefore} of this card before this pull.</p><button class="primary" id="nextCard">${currentIndex===pulled.length-1?'FINISH PACK':'NEXT CARD'}</button></div>`;let v=await getCardValue(c);if($('cardValue')){$('cardValue').textContent='💷 '+valueText(v.value);$('valueSource').textContent=(v.source==='unavailable'?'Price unavailable — this card is not currently covered by the pricing feed':v.source+' · indicative raw/ungraded price'+(v.updated?' · '+v.updated:''));}$('nextCard').onclick=()=>{addCard(c,v);if(currentIndex===pulled.length-1){$('reveal').classList.remove('show');toast('Pack added to your collection!');save();}else{currentIndex++;showReveal()}}}
+async function showReveal(){let c=pulled[currentIndex];if(!c)return;let rare=/(ultra|illustration|special|hyper|double|ace spec|secret)/i.test(c.rarity||'');if(rare){meta.rares++;meta.best=c.rarity||'Rare';}let ownedBefore=owned[c.id]?.count||0;$('revealContent').innerHTML=`<div class="reveal-card"><img src="${esc(imgUrl(c))}" alt="${esc(c.name)}"></div><div class="reveal-info"><div class="small">CARD ${currentIndex+1} OF ${pulled.length}</div><h2>${esc(c.name)}</h2><div>${esc(c.rarity||'Unknown rarity')} · ${esc(c.set?.name||'')}</div>${rare?'<div class="rare-banner">✨ BIG HIT! ✨</div>':''}<div class="value" id="cardValue">💷 Checking value…</div><div class="value-sub" id="valueSource">Cached market reference · ungraded</div><p class="small">You own ${ownedBefore} of this card before this pull.</p><button class="primary" id="nextCard">${currentIndex===pulled.length-1?'FINISH PACK':'NEXT CARD'}</button></div>`;let v=await getCardValue(c);if($('cardValue')){$('cardValue').textContent='💷 '+valueText(v.value);$('valueSource').textContent=(v.source==='unavailable'?'Price unavailable — this card is not currently covered by the pricing feed':v.source+' · cached indicative raw/ungraded price'+(v.updated?' · '+v.updated:''));}$('nextCard').onclick=()=>{addCard(c,v);if(currentIndex===pulled.length-1){$('reveal').classList.remove('show');toast('Pack added to your collection!');save();}else{currentIndex++;showReveal()}}}
 function addCard(c,v){if(!c?.id)return;if(!owned[c.id])owned[c.id]={count:0,card:c,value:v||null};owned[c.id].count++;if(v)owned[c.id].value=v}
 function dailyPack(){let today=new Date().toISOString().slice(0,10);if(meta.daily===today){toast('Daily pack already opened today!');return}meta.daily=today;openPack();toast('🎁 Daily pack!')}
 $('closeReveal').onclick=()=>$('reveal').classList.remove('show');
@@ -129,19 +69,17 @@ async function showSetDetail(id){
   const s=sets.find(x=>x.id===id); if(!s)return;
   document.querySelectorAll('.screen').forEach(x=>x.classList.remove('active')); $('setDetail').classList.add('active');
   $('setDetailTitle').textContent=s.name; $('setDetailMeta').textContent=`${s.series||''} · ${s.total||'?'} cards · ${s.releaseDate||''}`;
-  $('setDetailCards').innerHTML='<div class="empty">Loading cards and TCGPlayer market values…</div>';
+  $('setDetailCards').innerHTML='<div class="empty">Loading cards…</div>';
   try{
     let r=await fetch(DATA+'/cards/en/'+id+'.json');if(!r.ok)throw Error();let arr=await r.json();
-    const map=await loadPokeMPSetPrices(id);
-    const vals=arr.map(c=>({c,v:matchSetPrice(c,map)||{value:null,source:'unavailable'}}));
-    // Only use secondary lookups for cards missing from the set-level feed, throttled to avoid rate limits.
-    const missing=vals.filter(x=>x.v.value==null);
-    for(let i=0;i<missing.length;i+=8){await Promise.all(missing.slice(i,i+8).map(async x=>{x.v=await getCardValue(x.c)}));}
+    $('setDetailCount').textContent=`${arr.length} cards · using cached market values…`;
+    const prices=loadSetPrices(arr);
+    const vals=arr.map(c=>({c,v:prices.get(c.id)||{value:null,source:'unavailable'}}));
     vals.sort((a,b)=>(b.v.value??-1)-(a.v.value??-1));
     const priced=vals.filter(x=>x.v.value!=null).length;
     $('setDetailCount').textContent=`${vals.length} cards · ${priced} priced`;
-    $('setDetailCards').innerHTML=vals.map(({c,v})=>`<div class="card"><img loading="lazy" src="${esc(imgUrl(c))}" alt="${esc(c.name)}"><div class="ct"><div class="name">${esc(c.name)}</div><div class="rarity">${esc(c.number||'')} · ${esc(c.rarity||'Unknown')}</div><div class="rarity" style="font-weight:900;color:var(--good)">💷 ${valueText(v.value)}</div>${v.value!=null?`<div class="small">${esc(v.source||'Market reference')}</div>`:''}</div></div>`).join('');
-  }catch(e){$('setDetailCards').innerHTML='<div class="empty">Could not load this set.</div>'}
+    $('setDetailCards').innerHTML=vals.map(({c,v})=>`<div class="card"><img loading="lazy" src="${esc(imgUrl(c))}" alt="${esc(c.name)}"><div class="ct"><div class="name">${esc(c.name)}</div><div class="rarity">${esc(c.number||'')} · ${esc(c.rarity||'Unknown')}</div><div class="rarity" style="font-weight:900;color:var(--good)">💷 ${valueText(v.value)}</div>${v.value!=null?`<div class="small">${esc(v.source||'Market reference')} · ungraded</div>`:''}</div></div>`).join('');
+  }catch(e){$('setDetailCards').innerHTML='<div class="empty">Could not load the cards. Please check your internet connection and try again.</div>'}
 }
 $('backToSets').onclick=()=>showTab('sets');
 $('setSearch').addEventListener('input',renderSets);
@@ -158,5 +96,6 @@ function renderAchievements(){$('awardProgress').textContent=`${achievementDefs.
 function showTab(id){document.querySelectorAll('.tab').forEach(b=>b.classList.toggle('active',b.dataset.tab===id));document.querySelectorAll('.screen').forEach(s=>s.classList.toggle('active',s.id===id));if(id==='collection')renderCollection();if(id==='sets')renderSets();if(id==='achievements')renderAchievements()}
 document.querySelectorAll('.tab').forEach(b=>b.onclick=()=>showTab(b.dataset.tab));function esc(s){return String(s??'').replace(/[&<>"']/g,m=>({'&':'&amp;','<':'&lt;','>':'&gt;','"':'&quot;',"'":'&#39;'}[m]))}
 updateStats();renderCollection();renderAchievements();load();if('serviceWorker'in navigator)navigator.serviceWorker.register('sw.js').catch(()=>{});
+if(location.protocol==='file:'){const h=document.getElementById('localHint');if(h)h.style.display='block';}
 </script>
 </body></html>
