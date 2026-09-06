@@ -14,6 +14,8 @@ jobs:
     steps:
       - name: Checkout
         uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
 
       - name: Download Pokémon TCG data
         run: |
@@ -42,12 +44,18 @@ jobs:
 
       - name: Commit changes
         run: |
+          set -e
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          # The workflow can start from a slightly older main commit while
+          # another change is pushed during the download. Rebase before
+          # staging the generated files so the final push is not rejected.
+          git fetch origin main
+          git rebase origin/main
           git add pokemon-data prices.json
           if git diff --cached --quiet; then
             echo 'No data changes.'
           else
             git commit -m 'Update Pokémon card data and prices'
-            git push
+            git push origin HEAD:main
           fi
