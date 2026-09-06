@@ -2,6 +2,9 @@ name: Update Pokémon data
 
 on:
   workflow_dispatch:
+  push:
+    paths:
+      - 'scripts/update_prices.py'
   schedule:
     - cron: '15 3 * * *'
 
