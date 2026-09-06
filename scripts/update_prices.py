@@ -9,10 +9,6 @@ def norm(s):
 def card_numbers(n):
     s=str(n or '').strip().replace(' ','').lower()
     if not s:return []
-    # TCGCSV commonly stores numbers as 1/122, 001/122, TG01/TG30, etc.,
-    # while the Pokémon TCG data used by the app normally stores just 1, 001,
-    # or TG01. Store both the complete number and the part before '/' so the
-    # cached price can match either representation.
     values=[]
     def add(v):
         if v and v not in values:values.append(v)
@@ -37,7 +33,18 @@ def field(product,name):
 def main():
     print('Downloading TCGCSV groups...');groups=get_json(f'{BASE}/groups')
     if isinstance(groups,dict):groups=groups.get('results') or groups.get('groups') or []
-    print(f'Found {len(groups)} groups');prices={};meta=[]
+    # The cached card JSON uses set IDs (for example me4), while TCGCSV uses
+    # human-readable group names (for example ME04: Chaos Rising). Build a
+    # name -> official set ID map so prices can be looked up using either form.
+    set_ids={}
+    try:
+        with open('pokemon-data/sets/en.json',encoding='utf-8') as f:
+            for s in json.load(f):
+                if s.get('name') and s.get('id'):set_ids[norm(s['name'])]=str(s['id']).lower()
+    except Exception as e:
+        print(f'WARNING could not load local set IDs: {e}')
+    print(f'Found {len(groups)} groups; mapped {len(set_ids)} local set IDs')
+    prices={};meta=[]
     for i,g in enumerate(groups,1):
         gid=g.get('groupId');gname=g.get('name','')
         if not gid or not gname:continue
@@ -54,12 +61,15 @@ def main():
                 if not rows:continue
                 row=next((x for x in rows if 'holofoil' in str(x.get('subTypeName','')).lower()),None) or next((x for x in rows if str(x.get('subTypeName','')).lower()=='normal'),None) or rows[0]
                 usd=float(row['marketPrice']);value={'gbp':round(usd*USD_TO_GBP,2),'usd':round(usd,2),'source':'TCGplayer market','updated':row.get('modifiedOn',''),'group':gname,'number':str(num),'productId':p.get('productId')}
-                # TCGCSV often prefixes the official set name with a series label,
-                # e.g. "ME04: Chaos Rising". The app uses the official set name,
-                # so store both the full group key and the text after the final
-                # colon to make the cached prices match reliably.
                 names={norm(gname)}
                 if ':' in str(gname):names.add(norm(str(gname).split(':')[-1]))
+                # Also add the official Pokémon TCG set ID. The app's card
+                # records do not contain a nested set.name, so it falls back
+                # to selectedSetId (e.g. me4 for Chaos Rising).
+                ids=set()
+                for name in list(names):
+                    if name in set_ids:ids.add(set_ids[name])
+                names.update(ids)
                 for name in names:
                     for number in card_numbers(num):
                         prices[f'{name}|{number}']=value
