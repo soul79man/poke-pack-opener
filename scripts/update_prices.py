@@ -30,12 +30,35 @@ def field(product,name):
     for x in product.get('extendedData') or []:
         if str(x.get('name','')).lower()==name.lower():return x.get('value')
     return None
+def number_from_name(name):
+    s=str(name or '')
+    m=re.search(r'(?:#\s*)?(\d{1,3})\s*/\s*(\d{2,3})\b',s)
+    return m.group(1)+'/'+m.group(2) if m else None
+def choose_price(rows):
+    # Prefer TCGplayer market price. If market price is unavailable, use the
+    # median listing price, then the lowest listing price. TCGCSV notes that
+    # marketPrice can be null for cards with low sales volume, while midPrice
+    # and lowPrice may still be available.
+    usable=[x for x in rows if isinstance(x,dict)]
+    for label,key in [('TCGplayer market','marketPrice'),('TCGplayer median','midPrice'),('TCGplayer low listing','lowPrice')]:
+        candidates=[]
+        for x in usable:
+            try:
+                v=float(x.get(key) or 0)
+            except Exception:
+                v=0
+            if v>0:candidates.append((x,v))
+        if candidates:
+            # Prefer holofoil, then normal, then reverse holofoil, then any
+            # other positive printing.
+            preferred=next((z for z in candidates if 'holofoil' in str(z[0].get('subTypeName','')).lower() and 'reverse' not in str(z[0].get('subTypeName','')).lower()),None)
+            preferred=preferred or next((z for z in candidates if str(z[0].get('subTypeName','')).lower()=='normal'),None)
+            preferred=preferred or next((z for z in candidates if 'reverse holofoil' in str(z[0].get('subTypeName','')).lower()),None)
+            return preferred[0],preferred[1],label
+    return None,None,None
 def main():
     print('Downloading TCGCSV groups...');groups=get_json(f'{BASE}/groups')
     if isinstance(groups,dict):groups=groups.get('results') or groups.get('groups') or []
-    # The cached card JSON uses set IDs (for example me4), while TCGCSV uses
-    # human-readable group names (for example ME04: Chaos Rising). Build a
-    # name -> official set ID map so prices can be looked up using either form.
     set_ids={}
     try:
         with open('pokemon-data/sets/en.json',encoding='utf-8') as f:
@@ -53,31 +76,28 @@ def main():
             prices_raw=get_json(f'{BASE}/{gid}/prices'); prices_raw=prices_raw.get('results') if isinstance(prices_raw,dict) else prices_raw
             by_id={}
             for x in prices_raw or []:by_id.setdefault(str(x.get('productId')),[]).append(x)
-            count=0
+            count=0; market_count=0; fallback_count=0
             for p in products or []:
-                num=field(p,'Number')
+                num=field(p,'Number') or number_from_name(p.get('name'))
                 if not num:continue
-                rows=[x for x in by_id.get(str(p.get('productId')),[]) if float(x.get('marketPrice') or 0)>0]
-                if not rows:continue
-                row=next((x for x in rows if 'holofoil' in str(x.get('subTypeName','')).lower()),None) or next((x for x in rows if str(x.get('subTypeName','')).lower()=='normal'),None) or rows[0]
-                usd=float(row['marketPrice']);value={'gbp':round(usd*USD_TO_GBP,2),'usd':round(usd,2),'source':'TCGplayer market','updated':row.get('modifiedOn',''),'group':gname,'number':str(num),'productId':p.get('productId')}
+                row,usd,price_source=choose_price(by_id.get(str(p.get('productId')),[]))
+                if not row:continue
+                if price_source=='TCGplayer market':market_count+=1
+                else:fallback_count+=1
+                value={'gbp':round(usd*USD_TO_GBP,2),'usd':round(usd,2),'source':price_source,'updated':row.get('modifiedOn',''),'group':gname,'number':str(num),'productId':p.get('productId')}
                 names={norm(gname)}
                 if ':' in str(gname):names.add(norm(str(gname).split(':')[-1]))
-                # Also add the official Pokémon TCG set ID. The app's card
-                # records do not contain a nested set.name, so it falls back
-                # to selectedSetId (e.g. me4 for Chaos Rising).
                 ids=set()
                 for name in list(names):
                     if name in set_ids:ids.add(set_ids[name])
                 names.update(ids)
                 for name in names:
-                    for number in card_numbers(num):
-                        prices[f'{name}|{number}']=value
+                    for number in card_numbers(num):prices[f'{name}|{number}']=value
                 count+=1
-            meta.append({'id':gid,'name':gname,'cardsPriced':count});print(f'[{i}/{len(groups)}] {gname}: {count}')
+            meta.append({'id':gid,'name':gname,'cardsPriced':count,'marketPrices':market_count,'fallbackPrices':fallback_count});print(f'[{i}/{len(groups)}] {gname}: {count} ({market_count} market, {fallback_count} fallback)')
         except Exception as e:print(f'ERROR {gname} ({gid}): {e}')
         time.sleep(.10)
-    payload={'generatedAt':datetime.now(timezone.utc).isoformat(),'source':'TCGCSV / TCGplayer market','usdToGbp':USD_TO_GBP,'cardCount':len(prices),'groups':meta,'prices':prices}
+    payload={'generatedAt':datetime.now(timezone.utc).isoformat(),'source':'TCGCSV / TCGplayer','usdToGbp':USD_TO_GBP,'cardCount':len(prices),'groups':meta,'prices':prices}
     with open(OUT,'w',encoding='utf-8') as f:json.dump(payload,f,separators=(',',':'))
     print(f'Wrote {OUT} with {len(prices)} priced cards')
 if __name__=='__main__':main()
