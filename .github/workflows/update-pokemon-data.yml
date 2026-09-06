@@ -1,0 +1,53 @@
+name: Update Pokémon data
+
+on:
+  workflow_dispatch:
+  schedule:
+    - cron: '15 3 * * *'
+
+permissions:
+  contents: write
+
+jobs:
+  update-data:
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout
+        uses: actions/checkout@v4
+
+      - name: Download Pokémon TCG data
+        run: |
+          set -e
+          rm -rf pokemon-data
+          mkdir -p pokemon-data/sets/en pokemon-data/cards/en
+          curl -fsSL https://raw.githubusercontent.com/PokemonTCG/pokemon-tcg-data/master/sets/en.json -o pokemon-data/sets/en.json
+          python - <<'PY'
+          import json, pathlib, urllib.request
+          sets=json.load(open('pokemon-data/sets/en.json',encoding='utf-8'))
+          out=pathlib.Path('pokemon-data/cards/en')
+          for i,s in enumerate(sets,1):
+              sid=s['id']
+              url=f'https://raw.githubusercontent.com/PokemonTCG/pokemon-tcg-data/master/cards/en/{sid}.json'
+              try:
+                  data=urllib.request.urlopen(url,timeout=60).read()
+                  (out/f'{sid}.json').write_bytes(data)
+                  print(f'[{i}/{len(sets)}] {sid}')
+              except Exception as e:
+                  print(f'SKIP {sid}: {e}')
+          print('Downloaded',len(list(out.glob('*.json'))),'set card files')
+          PY
+
+      - name: Update cached prices
+        run: python scripts/update_prices.py
+
+      - name: Commit changes
+        run: |
+          git config user.name 'github-actions[bot]'
+          git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
+          git add pokemon-data prices.json
+          if git diff --cached --quiet; then
+            echo 'No data changes.'
+          else
+            git commit -m 'Update Pokémon card data and prices'
+            git push
+          fi
