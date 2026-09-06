@@ -31,8 +31,15 @@ def main():
                 rows=[x for x in by_id.get(str(p.get('productId')),[]) if float(x.get('marketPrice') or 0)>0]
                 if not rows:continue
                 row=next((x for x in rows if 'holofoil' in str(x.get('subTypeName','')).lower()),None) or next((x for x in rows if str(x.get('subTypeName','')).lower()=='normal'),None) or rows[0]
-                usd=float(row['marketPrice']);key=norm(gname)+'|'+card_number(num)
-                prices[key]={'gbp':round(usd*USD_TO_GBP,2),'usd':round(usd,2),'source':'TCGplayer market','updated':row.get('modifiedOn',''),'group':gname,'number':card_number(num),'productId':p.get('productId')};count+=1
+                usd=float(row['marketPrice']);number=card_number(num);value={'gbp':round(usd*USD_TO_GBP,2),'usd':round(usd,2),'source':'TCGplayer market','updated':row.get('modifiedOn',''),'group':gname,'number':number,'productId':p.get('productId')}
+                # TCGCSV often prefixes the official set name with a series label,
+                # e.g. "Mega Evolution: Chaos Rising". The app uses the official
+                # set name, so store both the full group key and the text after the
+                # final colon to make the cached prices match reliably.
+                names={norm(gname)}
+                if ':' in str(gname):names.add(norm(str(gname).split(':')[-1]))
+                for name in names:prices[f'{name}|{number}']=value
+                count+=1
             meta.append({'id':gid,'name':gname,'cardsPriced':count});print(f'[{i}/{len(groups)}] {gname}: {count}')
         except Exception as e:print(f'ERROR {gname} ({gid}): {e}')
         time.sleep(.10)
