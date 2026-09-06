@@ -47,11 +47,12 @@ jobs:
           set -e
           git config user.name 'github-actions[bot]'
           git config user.email '41898282+github-actions[bot]@users.noreply.github.com'
-          # The workflow can start from a slightly older main commit while
-          # another change is pushed during the download. Rebase before
-          # staging the generated files so the final push is not rejected.
+          # Generated files are uncommitted, so stash them before syncing main.
+          # This prevents the rebase from failing with 'unstaged changes'.
+          git stash push --include-untracked -m 'generated pokemon data'
           git fetch origin main
           git rebase origin/main
+          git stash pop
           git add pokemon-data prices.json
           if git diff --cached --quiet; then
             echo 'No data changes.'
