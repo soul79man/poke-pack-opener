@@ -7,7 +7,11 @@ def get_json(url):
 def norm(s):
     s=str(s or '').lower().replace('&','and');s=re.sub(r'^[a-z]{1,5}\s*\d{1,3}\s*:\s*','',s);s=re.sub(r'[^a-z0-9]+',' ',s).strip();return re.sub(r'\s+',' ',s)
 def card_number(n):
-    s=str(n or '').strip().replace(' ','');m=re.match(r'^(\d+)\/(\d+)$',s);return f'{int(m.group(1))}/{int(m.group(2))}' if m else s.lower()
+    s=str(n or '').strip().replace(' ','')
+    m=re.match(r'^(\d+)\/(\d+)$',s)
+    if m:return f'{int(m.group(1))}/{int(m.group(2))}'
+    if s.isdigit():return str(int(s))
+    return s.lower()
 def field(product,name):
     for x in product.get('extendedData') or []:
         if str(x.get('name','')).lower()==name.lower():return x.get('value')
@@ -33,9 +37,9 @@ def main():
                 row=next((x for x in rows if 'holofoil' in str(x.get('subTypeName','')).lower()),None) or next((x for x in rows if str(x.get('subTypeName','')).lower()=='normal'),None) or rows[0]
                 usd=float(row['marketPrice']);number=card_number(num);value={'gbp':round(usd*USD_TO_GBP,2),'usd':round(usd,2),'source':'TCGplayer market','updated':row.get('modifiedOn',''),'group':gname,'number':number,'productId':p.get('productId')}
                 # TCGCSV often prefixes the official set name with a series label,
-                # e.g. "Mega Evolution: Chaos Rising". The app uses the official
-                # set name, so store both the full group key and the text after the
-                # final colon to make the cached prices match reliably.
+                # e.g. "ME04: Chaos Rising". The app uses the official set name,
+                # so store both the full group key and the text after the final
+                # colon to make the cached prices match reliably.
                 names={norm(gname)}
                 if ':' in str(gname):names.add(norm(str(gname).split(':')[-1]))
                 for name in names:prices[f'{name}|{number}']=value
