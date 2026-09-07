@@ -9,10 +9,7 @@ REQUEST_DELAY = 0.25
 
 
 def get_json(url):
-    req = urllib.request.Request(
-        url,
-        headers={'User-Agent': UA, 'Accept': 'application/json'}
-    )
+    req = urllib.request.Request(url, headers={'User-Agent': UA, 'Accept': 'application/json'})
     with urllib.request.urlopen(req, timeout=60) as r:
         data = json.load(r)
     time.sleep(REQUEST_DELAY)
@@ -33,8 +30,7 @@ def card_number(n):
 
 
 def app_number(n):
-    s = card_number(n)
-    return s.split('/')[0]
+    return card_number(n).split('/')[0]
 
 
 def field(product, name):
@@ -49,22 +45,16 @@ def main():
     groups = get_json(f'{BASE}/groups')
     if isinstance(groups, dict):
         groups = groups.get('results') or groups.get('groups') or []
-
     print(f'Found {len(groups)} groups')
-    prices = {}
-    meta = []
-    errors = 0
 
+    prices, meta, errors = {}, [], 0
     for i, g in enumerate(groups, 1):
-        gid = g.get('groupId')
-        gname = g.get('name', '')
+        gid, gname = g.get('groupId'), g.get('name', '')
         if not gid or not gname:
             continue
-
         try:
             products = get_json(f'{BASE}/{gid}/products')
             products = products.get('results') if isinstance(products, dict) else products
-
             prices_raw = get_json(f'{BASE}/{gid}/prices')
             prices_raw = prices_raw.get('results') if isinstance(prices_raw, dict) else prices_raw
 
@@ -77,68 +67,41 @@ def main():
                 num = field(p, 'Number')
                 if not num:
                     continue
-
-                rows = [
-                    x for x in by_id.get(str(p.get('productId')), [])
-                    if float(x.get('marketPrice') or 0) > 0
-                ]
+                rows = [x for x in by_id.get(str(p.get('productId')), []) if float(x.get('marketPrice') or 0) > 0]
                 if not rows:
                     continue
-
-                row = (
-                    next((x for x in rows if 'holofoil' in str(x.get('subTypeName', '')).lower()), None)
-                    or next((x for x in rows if str(x.get('subTypeName', '')).lower() == 'normal'), None)
-                    or rows[0]
-                )
-
+                row = (next((x for x in rows if 'holofoil' in str(x.get('subTypeName', '')).lower()), None)
+                       or next((x for x in rows if str(x.get('subTypeName', '')).lower() == 'normal'), None)
+                       or rows[0])
                 usd = float(row['marketPrice'])
                 full_num = card_number(num)
-                value = {
-                    'gbp': round(usd * USD_TO_GBP, 2),
-                    'usd': round(usd, 2),
-                    'source': 'TCGplayer market',
-                    'updated': row.get('modifiedOn', ''),
-                    'group': gname,
-                    'number': full_num,
-                    'productId': p.get('productId')
-                }
+                value = {'gbp': round(usd * USD_TO_GBP, 2), 'usd': round(usd, 2),
+                         'source': 'TCGplayer market', 'updated': row.get('modifiedOn', ''),
+                         'group': gname, 'number': full_num, 'productId': p.get('productId')}
 
-                # The Pokémon card database uses just the card number, e.g. 116.
-                # TCGCSV uses 116/086. Store the app-compatible key.
                 number_key = app_number(num)
                 prices[norm(gname) + '|' + number_key] = value
 
-                # Some Pokémon set names contain the series prefix while TCGCSV
-                # group names do not, e.g. "Mega Evolution—Chaos Rising" vs
-                # "ME04: Chaos Rising". Store that alias too.
-                prices[norm('Mega Evolution ' + gname) + '|' + number_key] = value
+                # Pokémon data uses names such as "Mega Evolution—Chaos Rising".
+                # TCGCSV uses "ME04: Chaos Rising". Strip the TCGCSV set code
+                # before adding the Mega Evolution alias so the keys match exactly.
+                group_title = gname.split(':', 1)[1].strip() if ':' in gname else gname
+                prices[norm('Mega Evolution ' + group_title) + '|' + number_key] = value
                 count += 1
 
             meta.append({'id': gid, 'name': gname, 'cardsPriced': count})
             print(f'[{i}/{len(groups)}] {gname}: {count}')
-
         except Exception as e:
             errors += 1
             print(f'ERROR {gname} ({gid}): {e}')
 
     if len(prices) < 10000:
-        raise RuntimeError(
-            f'Price refresh produced only {len(prices)} priced cards with {errors} group errors. '
-            'Refusing to overwrite prices.json.'
-        )
+        raise RuntimeError(f'Price refresh produced only {len(prices)} priced cards with {errors} group errors. Refusing to overwrite prices.json.')
 
-    payload = {
-        'generatedAt': datetime.now(timezone.utc).isoformat(),
-        'source': 'TCGCSV / TCGplayer market',
-        'usdToGbp': USD_TO_GBP,
-        'cardCount': len(prices),
-        'groups': meta,
-        'prices': prices
-    }
-
+    payload = {'generatedAt': datetime.now(timezone.utc).isoformat(), 'source': 'TCGCSV / TCGplayer market',
+               'usdToGbp': USD_TO_GBP, 'cardCount': len(prices), 'groups': meta, 'prices': prices}
     with open(OUT, 'w', encoding='utf-8') as f:
         json.dump(payload, f, separators=(',', ':'))
-
     print(f'Wrote {OUT} with {len(prices)} price keys')
 
 
