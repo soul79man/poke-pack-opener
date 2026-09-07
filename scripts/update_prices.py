@@ -15,7 +15,6 @@ def get_json(url):
     )
     with urllib.request.urlopen(req, timeout=60) as r:
         data = json.load(r)
-    # TCGCSV asks clients to keep requests to a reasonable rate.
     time.sleep(REQUEST_DELAY)
     return data
 
@@ -31,6 +30,13 @@ def card_number(n):
     s = str(n or '').strip().replace(' ', '')
     m = re.match(r'^(\d+)\/(\d+)$', s)
     return f'{int(m.group(1))}/{int(m.group(2))}' if m else s.lower()
+
+
+def app_number(n):
+    # Pokémon TCG data uses "116", while TCGCSV uses "116/086".
+    # The web app keys prices by the Pokémon data card number.
+    s = card_number(n)
+    return s.split('/')[0]
 
 
 def field(product, name):
@@ -88,14 +94,15 @@ def main():
                 )
 
                 usd = float(row['marketPrice'])
-                key = norm(gname) + '|' + card_number(num)
+                full_num = card_number(num)
+                key = norm(gname) + '|' + app_number(num)
                 prices[key] = {
                     'gbp': round(usd * USD_TO_GBP, 2),
                     'usd': round(usd, 2),
                     'source': 'TCGplayer market',
                     'updated': row.get('modifiedOn', ''),
                     'group': gname,
-                    'number': card_number(num),
+                    'number': full_num,
                     'productId': p.get('productId')
                 }
                 count += 1
@@ -107,8 +114,6 @@ def main():
             errors += 1
             print(f'ERROR {gname} ({gid}): {e}')
 
-    # Never replace a good cached price file with an empty/partial result.
-    # A normal full Pokémon refresh should contain many thousands of cards.
     if len(prices) < 10000:
         raise RuntimeError(
             f'Price refresh produced only {len(prices)} priced cards with {errors} group errors. '
