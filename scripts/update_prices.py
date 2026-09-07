@@ -33,8 +33,6 @@ def card_number(n):
 
 
 def app_number(n):
-    # Pokémon TCG data uses "116", while TCGCSV uses "116/086".
-    # The web app keys prices by the Pokémon data card number.
     s = card_number(n)
     return s.split('/')[0]
 
@@ -95,8 +93,7 @@ def main():
 
                 usd = float(row['marketPrice'])
                 full_num = card_number(num)
-                key = norm(gname) + '|' + app_number(num)
-                prices[key] = {
+                value = {
                     'gbp': round(usd * USD_TO_GBP, 2),
                     'usd': round(usd, 2),
                     'source': 'TCGplayer market',
@@ -105,6 +102,16 @@ def main():
                     'number': full_num,
                     'productId': p.get('productId')
                 }
+
+                # The Pokémon card database uses just the card number, e.g. 116.
+                # TCGCSV uses 116/086. Store the app-compatible key.
+                number_key = app_number(num)
+                prices[norm(gname) + '|' + number_key] = value
+
+                # Some Pokémon set names contain the series prefix while TCGCSV
+                # group names do not, e.g. "Mega Evolution—Chaos Rising" vs
+                # "ME04: Chaos Rising". Store that alias too.
+                prices[norm('Mega Evolution ' + gname) + '|' + number_key] = value
                 count += 1
 
             meta.append({'id': gid, 'name': gname, 'cardsPriced': count})
@@ -132,7 +139,7 @@ def main():
     with open(OUT, 'w', encoding='utf-8') as f:
         json.dump(payload, f, separators=(',', ':'))
 
-    print(f'Wrote {OUT} with {len(prices)} priced cards')
+    print(f'Wrote {OUT} with {len(prices)} price keys')
 
 
 if __name__ == '__main__':
