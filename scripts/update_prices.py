@@ -40,3 +40,4 @@ def main():
     with open(OUT,'w',encoding='utf-8') as f:json.dump(payload,f,separators=(',',':'))
     print(f'Wrote {OUT} with {len(prices)} priced cards')
 if __name__=='__main__':main()
+# Trigger the existing data-refresh workflow so the cache is regenerated after setup changes.
